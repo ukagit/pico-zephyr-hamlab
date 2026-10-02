@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HamLab · DL2DBG</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101722;color:#e9f1fa}
+*{box-sizing:border-box}body{margin:0 auto;max-width:940px;padding:20px 16px 48px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+h1{margin:0;font-size:1.5rem}small,.muted{color:#9aafc6}
+.pill{padding:7px 12px;border-radius:99px;background:#304052;white-space:nowrap}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:#1b2735;border:1px solid #384a60;border-radius:16px;padding:20px;min-width:0}
+.span{grid-column:1/-1}.label{font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:#afc3da}
+.freq{background:#3b321d;border-color:#ad8d3f}.freq .label{color:#f5d981}
+.big{font-variant-numeric:tabular-nums;font-size:clamp(2.2rem,8vw,4.5rem);font-weight:700;line-height:1.12;margin:10px 0 20px;overflow-wrap:anywhere}
+.unit{font-size:1rem;font-weight:400;color:#aebfd2;margin-left:6px}
+.value{font-variant-numeric:tabular-nums;font-size:clamp(1.7rem,5vw,2.7rem);font-weight:650;margin:12px 0}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}input,select,button{font:inherit;border-radius:9px;padding:10px 12px}
+input,select{background:#0e1722;color:#fff;border:1px solid #6c8097}input{width:min(100%,195px)}
+button{background:#285e8f;color:#fff;border:1px solid #6ba5d1;cursor:pointer;min-width:48px}
+button:hover{background:#3479af}button:disabled{opacity:.5;cursor:wait}
+.meter{border-left:5px solid #5eaddb}.meter.b{border-left-color:#8cc789}
+.error{color:#ffbd9d}.foot{margin-top:18px;display:flex;gap:14px;flex-wrap:wrap}
+details{margin-top:22px}pre{overflow:auto;white-space:pre-wrap;word-break:break-all;color:#c5d5e5}
+.scan-input{width:92px}canvas{display:block;width:100%;height:auto;background:#101a28;border:1px solid #43576d;border-radius:10px;margin:14px 0;touch-action:none}
+.scan-actions{margin-top:12px}.note{line-height:1.5;color:#b5c8da}
+@media(max-width:620px){.grid{grid-template-columns:1fr}.span{grid-column:auto}}
+</style>
+<nav><a href="/compact">Kompaktanzeige</a></nav>
+<header><h1>HamLab <small>· DL2DBG</small></h1><span id="connection" class="pill">Verbinden …</span></header>
+<main class="grid">
+<section class="card span freq">
+<div class="label">AD9850 · Frequenz</div><div class="big"><span id="frequency">—</span><span class="unit">Hz</span></div>
+<div class="row"><button type="button" id="minus" aria-label="Frequenz senken">−</button>
+<select id="step" aria-label="Frequenzschritt"><option value="1">1 Hz</option><option value="10">10 Hz</option><option value="100">100 Hz</option><option value="1000" selected>1 kHz</option><option value="10000">10 kHz</option><option value="100000">100 kHz</option><option value="1000000">1 MHz</option></select>
+<button type="button" id="plus" aria-label="Frequenz erhöhen">+</button>
+<input id="freqInput" type="number" min="0" max="40000000" step="1" placeholder="Frequenz in Hz" aria-label="Frequenz in Hz"><button type="button" id="freqSet">Setzen</button></div>
+</section>
+<section class="card meter"><div class="label">HF-Meter · A0</div><div class="value"><span id="a0">—</span><span class="unit">dBm</span></div><div id="a0v" class="muted">—</div></section>
+<section class="card meter b"><div class="label">HF-Meter · A1</div><div class="value"><span id="a1">—</span><span class="unit">dBm</span></div><div id="a1v" class="muted">—</div></section>
+<section class="card span"><div class="label">PE4302 · Dämpfung</div><div class="value"><span id="attenuation">—</span><span class="unit">dB</span></div>
+<div class="row"><button type="button" id="attMinus" aria-label="Dämpfung senken">−</button><button type="button" id="attPlus" aria-label="Dämpfung erhöhen">+</button><input id="attInput" type="number" min="0" max="30" step="1" aria-label="Dämpfung in dB"><button type="button" id="attSet">Setzen</button></div></section>
+</main>
+<section class="card" style="margin-top:14px"><div class="label">AD9850 · Online-Frequenzsweep</div>
+<p class="note">DDS-Ausgang → Splitter → A0 und A1. Zuerst beide Zweige ohne Filter als Baseline messen. Danach Filter nur in A0 einsetzen; A1 bleibt Referenz. Pegel und 50-Ω-Abschluss vor dem Start prüfen.</p>
+<div class="row"><label>Start MHz <input class="scan-input" id="scanStart" type="number" min="0.000001" max="40" step="any" value="1"></label>
+<label>Stopp MHz <input class="scan-input" id="scanStop" type="number" min="0.000001" max="40" step="any" value="11"></label>
+<label>Schritt MHz <input class="scan-input" id="scanStep" type="number" min="0.000001" step="any" value="0.1"></label>
+<label>Wartezeit ms <input class="scan-input" id="scanDwell" type="number" min="0" max="1000" value="0"></label>
+<label>Messungen <input class="scan-input" id="scanSamples" type="number" min="1" max="8" value="1"></label></div>
+<div class="row scan-actions"><button id="baselineStart" type="button">Baseline messen</button><button id="dutStart" type="button">Filter messen</button><button id="scanStopButton" type="button">Stopp</button><button id="scanCsv" type="button">CSV speichern</button></div>
+<div id="scanStatus" class="muted" style="margin-top:12px">Bereit</div>
+<canvas id="sweepGraph" width="860" height="400" aria-label="Frequenzgang"></canvas>
+<div id="cutoffReadout" class="muted">−3-dB-Grenzen nach vollständiger Filtermessung</div>
+<div id="cursorReadout" class="muted">Maus oder Finger auf die Kurve: Frequenz und Pegel ablesen</div>
+</section>
+<div class="foot"><span id="version" class="muted">Firmware …</span><span id="error" class="error" role="status"></span></div>
+<section><h2>Live SWR · externer Generator</h2><div class="row"><button id="swrOn" type="button">SWR ein</button><button id="swrOff" type="button">SWR aus</button><label>Korrekturfrequenz MHz <input id="swrReference" type="number" min="1" max="30" step="0.001" value="7.1"></label></div><p id="liveSwr" style="font-size:2rem">Ausgeschaltet. USB/Telnet: hamlab swr on</p><p class="muted">A1 vorwärts, A0 rückwärts. Beim manuellen Sweep bleibt die Korrekturfrequenz fest. FY6900-Frequenz wird nicht automatisch erfasst. Kalibrierung: Selbstbaukoppler mit Deckel, umbau1, 1–30 MHz.</p></section>
+<section><h2>Live Leistung</h2>
+<div class="row"><label>Messfrequenz MHz <input id="powerFreq" type="number" min="1" max="30" step="0.001" value="7"></label>
+<label>Koppeldämpfung dB <input id="powerCoupling" type="number" min="0" max="80" step="0.01" value="0"></label>
+<label>Vorlauf <select id="powerChannel"><option value="0">A0</option><option value="1" selected>A1</option></select></label>
+<button id="powerOn" type="button">Übernehmen / Ein</button><button id="powerOff" type="button">Aus</button></div>
+<p id="livePower" style="font-size:1.5rem">—</p><p id="detectorPower">—</p>
+<p class="muted">Direkte Messung: 0 dB und angeschlossenen Kanal wählen. Mit Koppler dessen gemessene Koppeldämpfung eintragen. Derselbe Faktor gilt für beide Richtungen. Externe Generatorfrequenz wird nicht automatisch erkannt. SWR bleibt fest A1 vorwärts / A0 rückwärts. Hauptleitungswert „—“: deaktiviert, Messfehler oder Detektor außerhalb −65 bis +10 dBm. Abgleich vorläufig auf Scope-Basis.</p></section>
+<details><summary>JSON-Status</summary><pre id="json">—</pre></details>
+<script>
+const el=id=>document.getElementById(id);let state=null,busy=false,powerLoaded=false,saving=false,revision=0;
+const dirty={freqInput:false,attInput:false};
+for(const id of Object.keys(dirty))el(id).addEventListener("input",()=>dirty[id]=true);
+async function switchSwr(on){
+ const hz=on?Math.round(Number(el('swrReference').value)*1e6):0;
+ if(on&&(!Number.isFinite(hz)||hz<1000000||hz>30000000)){el('error').textContent='Korrekturfrequenz: 1–30 MHz';return;}
+ try{const r=await fetch('/api/v1/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({swr_frequency_hz:hz})});if(!r.ok)throw Error(await r.text());el('error').textContent='';await refresh();}catch(e){el('error').textContent=e.message;}
+}
+el('swrOn').onclick=()=>switchSwr(true);el('swrOff').onclick=()=>switchSwr(false);
+
+async function switchPower(on){
+ const hz=Math.round(Number(el('powerFreq').value)*1e6),coupling=Math.round(Number(el('powerCoupling').value)*1000),channel=Number(el('powerChannel').value);
+ if(!Number.isFinite(hz)||hz<1e6||hz>30e6||!Number.isFinite(coupling)||coupling<0||coupling>80000){el('error').textContent='Leistung: 1–30 MHz, 0–80 dB';return;}
+ try{const r=await fetch('/api/v1/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:on?1:0,frequency_hz:hz,coupling_millidb:coupling,forward_channel:channel})});if(!r.ok)throw Error(await r.text());el('error').textContent='';await refresh();}catch(e){el('error').textContent=e.message;}
+}
+el('powerOn').onclick=()=>switchPower(true);el('powerOff').onclick=()=>switchPower(false);
+function watts(w){if(w===null)return '—';return w>=1?w.toFixed(3)+' W':w>=.001?(w*1000).toFixed(3)+' mW':(w*1e6).toFixed(3)+' µW';}
+async function refresh(){if(busy||saving)return;busy=true;const generation=revision;
+ try{const r=await fetch('/api/v1/state',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);
+ const x=await r.json();if(generation!==revision)return;state=x;
+ if(x.swr)el("liveSwr").textContent=x.swr.enabled?(x.swr.frequency_hz/1e6).toFixed(3)+" MHz Korrektur · SWR "+(x.swr.value===null?"—":Number(x.swr.value).toFixed(1))+" · "+x.swr.quality:"SWR ausgeschaltet";el('connection').textContent=x.measurement_valid?'Verbunden · Messung OK':'Verbunden · Messfehler';
+ if(x.power){let p=x.power;
+ if(!powerLoaded){if(p.frequency_hz)el('powerFreq').value=p.frequency_hz/1e6;el('powerCoupling').value=p.coupling_db;el('powerChannel').value=p.forward_channel;powerLoaded=true;}
+ el('livePower').textContent=p.enabled?'Vorlauf A'+p.forward_channel+': '+watts(p.forward_w)+' · Rücklauf A'+(1-p.forward_channel)+': '+watts(p.reverse_w)+' · '+(p.frequency_hz/1e6).toFixed(3)+' MHz / '+p.coupling_db+' dB':'Hauptleitungsanzeige ausgeschaltet';
+ el('detectorPower').textContent=x.measurement_valid?'Am AD8307: A0 '+watts(x.channels[0].mw/1000)+' · A1 '+watts(x.channels[1].mw/1000):'Detektormessung ungültig';
+ }
+ el('frequency').textContent=Number(x.frequency_hz).toLocaleString('de-DE');el('attenuation').textContent=x.attenuation_db;
+ if(!dirty.freqInput&&document.activeElement!==el('freqInput'))el('freqInput').value=x.frequency_hz;
+ if(!dirty.attInput&&document.activeElement!==el('attInput'))el('attInput').value=x.attenuation_db;
+ for(let i=0;i<2;i++){let c=x.channels[i],valid=x.measurement_valid;
+ el('a'+i).textContent=valid?Number(c.dbm).toFixed(2):'—';
+ el('a'+i+'v').textContent=valid?Number(c.voltage_v).toFixed(4)+' V ADC · '+Number(c.vpp).toFixed(4)+' Vpp':'Messung nicht verfügbar';}
+ el('json').textContent=JSON.stringify(x,null,2);el('error').textContent='';
+ }catch(e){el('connection').textContent='Verbindung unterbrochen';el('error').textContent=String(e)}finally{busy=false}}
+async function setValue(field,value,min,max){if(!Number.isInteger(value)||value<min||value>max){el('error').textContent='Wert außerhalb '+min+'–'+max;return}
+ if(saving)return;saving=true;revision++;
+ try{let r=await fetch('/api/v1/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})});
+ if(!r.ok)throw Error('HTTP '+r.status+': '+await r.text());state=await r.json();const id=field==='frequency_hz'?'freqInput':'attInput';dirty[id]=false;el(id).value=state[field];el('error').textContent='';
+ }catch(e){el('error').textContent=String(e)}finally{saving=false;refresh()}}
+el('minus').onclick=()=>state&&setValue('frequency_hz',Math.max(0,state.frequency_hz-Number(el('step').value)),0,40000000);
+el('plus').onclick=()=>state&&setValue('frequency_hz',Math.min(40000000,state.frequency_hz+Number(el('step').value)),0,40000000);
+el('freqSet').onclick=()=>setValue('frequency_hz',Number(el('freqInput').value),0,40000000);
+el('attMinus').onclick=()=>state&&setValue('attenuation_db',Math.max(0,state.attenuation_db-1),0,30);
+el('attPlus').onclick=()=>state&&setValue('attenuation_db',Math.min(30,state.attenuation_db+1),0,30);
+el('attSet').onclick=()=>setValue('attenuation_db',Number(el('attInput').value),0,30);
+fetch('/api/v1/info').then(r=>r.json()).then(x=>el('version').textContent='Firmware '+x.version).catch(()=>{});
+refresh();setInterval(refresh,500);
+</script>
+<script src="/sweep.js"></script>
+</html>

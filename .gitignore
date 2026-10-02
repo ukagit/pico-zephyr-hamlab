@@ -1,0 +1,9 @@
+build/
+build-*/
+.venv/
+__pycache__/
+*.py[cod]
+*.csv
+cal_scope_*.png
+*.tar
+*.tar.gz

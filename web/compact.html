@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HamLab kompakt</title><style>
+:root{color-scheme:dark;font-family:system-ui;background:#101722;color:#e9f1fa}
+body{max-width:760px;margin:auto;padding:16px}a{color:#9bd2ff}header{display:flex;justify-content:space-between;gap:12px;font-size:.85rem}
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}.card{background:#1b2735;border:1px solid #43576d;border-radius:12px;padding:16px;min-width:0}
+.label{color:#afc3da}.reading{font-size:clamp(2rem,7vw,4rem);font-weight:700;font-variant-numeric:tabular-nums;margin:8px 0}.unit{font-size:1rem;color:#afc3da}
+.controls{font-size:.9rem;display:grid;gap:12px}.row{display:flex;align-items:center;flex-wrap:wrap;gap:8px}input,button{font:inherit;padding:8px;border-radius:6px;border:1px solid #6c8097;background:#152333;color:white}input{width:145px}button{background:#285e8f;cursor:pointer}
+#error{color:#ffbd9d;min-height:1.3em}.muted{color:#9aafc6;font-size:.8rem}button:disabled{opacity:.5}
+@media(max-width:380px){.meters{grid-template-columns:1fr}}
+</style><header><a href="/">Vollansicht</a><span id="connection">Verbinden …</span></header>
+<main class="meters"><section class="card"><div class="label">A0</div><div class="reading"><span id="a0">—</span> <span class="unit">dBm</span></div><div id="p0" class="muted">—</div></section>
+<section class="card"><div class="label">A1</div><div class="reading"><span id="a1">—</span> <span class="unit">dBm</span></div><div id="p1" class="muted">—</div></section></main>
+<section class="card controls">
+<div>DDS: <strong id="frequency">—</strong> Hz · ATT: <strong id="attenuation">—</strong> dB</div>
+<form id="freqForm" class="row"><label for="freqInput">Frequenz Hz</label><input id="freqInput" type="number" min="0" max="40000000" step="1" required><button id="freqSet">Setzen</button></form>
+<form id="attForm" class="row"><label for="attInput">Dämpfung dB</label><input id="attInput" type="number" min="0" max="30" step="1" required><button id="attSet">Setzen</button></form>
+</section><p id="error" role="status"></p><footer id="version" class="muted"></footer>
+<script>
+const el=id=>document.getElementById(id),dirty={freqInput:false,attInput:false};
+let busy=false,saving=false,revision=0;
+for(const id of Object.keys(dirty))el(id).addEventListener('input',()=>dirty[id]=true);
+async function refresh(){
+ if(busy||saving)return;busy=true;const generation=revision;
+ try{const r=await fetch('/api/v1/state',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const x=await r.json();if(generation!==revision)return;
+ el('frequency').textContent=Number(x.frequency_hz).toLocaleString('de-DE');el('attenuation').textContent=x.attenuation_db;
+ if(!dirty.freqInput&&document.activeElement!==el('freqInput'))el('freqInput').value=x.frequency_hz;
+ if(!dirty.attInput&&document.activeElement!==el('attInput'))el('attInput').value=x.attenuation_db;
+ for(let i=0;i<2;i++){el('a'+i).textContent=x.measurement_valid?Number(x.channels[i].dbm).toFixed(2):'—';el('p'+i).textContent=x.measurement_valid?Number(x.channels[i].mw).toPrecision(4)+' mW':'Messfehler';}
+ el('connection').textContent=x.measurement_valid?'Verbunden':'Messfehler';
+ }catch(e){el('connection').textContent='Offline';el('error').textContent=e.message;}finally{busy=false;}
+}
+async function setValue(field,id,max){
+ const raw=el(id).value,value=Number(raw);if(raw===''||!Number.isInteger(value)||value<0||value>max){el('error').textContent='Wert: 0–'+max;return;}
+ if(saving)return;saving=true;revision++;el('freqSet').disabled=el('attSet').disabled=true;
+ try{const r=await fetch('/api/v1/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})});if(!r.ok)throw Error(await r.text());const x=await r.json();dirty[id]=false;el(id).value=x[field];el('error').textContent='';
+ }catch(e){el('error').textContent=e.message;}finally{saving=false;el('freqSet').disabled=el('attSet').disabled=false;refresh();}
+}
+el('freqForm').onsubmit=e=>{e.preventDefault();setValue('frequency_hz','freqInput',40000000);};
+el('attForm').onsubmit=e=>{e.preventDefault();setValue('attenuation_db','attInput',30);};
+fetch('/api/v1/info').then(r=>r.json()).then(x=>el('version').textContent='HamLab '+x.version).catch(()=>{});
+refresh();setInterval(refresh,500);
+</script></html>
